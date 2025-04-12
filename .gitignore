@@ -41,7 +41,6 @@ scripts/python/take_layers
 **/*.sopc_builder
 **/*.summary
 **/*.sopcinfo
-*.txt
 v*~
 **/*example*
 
@@ -70,3 +69,6 @@ ModelSim/sc_dpiheader.h
 ModelSim/vsim.dbg
 
 sim
+
+# ignore cmake build dir
+build
