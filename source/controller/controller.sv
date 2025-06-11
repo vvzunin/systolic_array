@@ -48,11 +48,12 @@ module controller
     logic [                               $clog2(2 * DATA_WIDTH) - 1:0] bit_ptr;
 
     typedef enum {
+        IDLE_S,
         SEND_BYTE,
         INCREMENT,
         WAIT
     } send_back_state_t;
-    send_back_state_t sb_state;
+    send_back_state_t sb_state, sb_next_state;
     
     // SEVEN SEGMENT (FOR DEBUG) //
     logic [              7:0] abcdefgh_r;
@@ -84,10 +85,25 @@ module controller
             WAIT_RES:
                 if (                            sa_ready) next_state = SEND_BACK;
             SEND_BACK:
-                if ((row_ptr == ARRAY_A_W - 1) & (col_ptr == ARRAY_W_L - 1) & (sb_state == SEND_BYTE))
+                if ((row_ptr == ARRAY_A_W - 1) & (col_ptr == ARRAY_W_L - 1))
                                                           next_state = IDLE;
         endcase
     end
+    
+    always_comb begin
+        sb_next_state = sb_state;
+        case (sb_state)
+            IDLE_S:
+                if(state == SEND_BACK) sb_next_state = SEND_BYTE;
+            SEND_BYTE:
+                sb_next_state = INCREMENT;
+            INCREMENT:
+                sb_next_state = WAIT;
+            WAIT:
+                if (~tx_busy) sb_next_state = SEND_BYTE;
+        endcase
+    end
+
 
     assign sa_weights_load = state == LOAD_WEIGHTS;
     assign sa_start_comp   = state == START_COMP;
@@ -130,14 +146,12 @@ module controller
                 row_ptr  <= '0;
                 col_ptr  <= '0;
                 bit_ptr  <= '0;
-                sb_state <= SEND_BYTE;
             end
             SEND_BACK: begin
                 case (sb_state)
                 SEND_BYTE: begin
-                    tx_data  <= sa_out_data[row_ptr][col_ptr][bit_ptr +: 8];
+                    tx_data  <= 8'h55;
                     tx_valid <= '1;
-                    sb_state <= INCREMENT; 
                 end
                 INCREMENT: begin
                     tx_valid <= '0;
@@ -151,11 +165,6 @@ module controller
                         col_ptr <= '0;
                     end
                     else col_ptr <= col_ptr + 'd1;
-                    sb_state <= WAIT;
-                end
-                WAIT: begin
-                    if (~tx_busy) 
-                        sb_state <= SEND_BYTE;
                 end
                 endcase
             end
@@ -169,6 +178,15 @@ module controller
         end
         else begin
             state <= next_state;
+        end
+    end
+    
+    always_ff @( posedge clk ) begin
+        if (!rstn) begin
+            sb_state <= IDLE_S;
+        end
+        else begin
+            sb_state <= sb_next_state;
         end
     end
 
@@ -192,7 +210,6 @@ module controller
         .rx_byte(rx_data),              
         .is_receiving(rx_busy),         
         .is_transmitting(tx_busy),    
-        .recv_error(rx_error)           
     );
     
     uart_parser #(
