@@ -24,6 +24,9 @@ module controller
     // UART //
     logic [7:0] rx_data, tx_data;
     logic       rx_busy, tx_busy, rx_error, tx_valid, rx_valid;
+    logic tx_out;
+    
+    assign tx = ~ tx_out;
 
     // PARSER //
     logic [             7:0] parser_data_len;
@@ -203,7 +206,7 @@ module controller
         .clk(clk),                       
         .rstn(rstn),               
         .rx(rx),                       
-        .tx(tx),                        
+        .tx(tx_out),                        
         .transmit(tx_valid),          
         .tx_byte(tx_data),              
         .received(rx_valid),        
