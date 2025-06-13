@@ -22,17 +22,20 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-module uart (
+module uart #(
+    parameter CLK_FREQ = 50_000_000,
+    BAUD_RATE = 9600
+) (
     input              clk,                 // The master clock for this module
     input              rstn,                // Synchronous reset
     input              rx,                  // Incoming serial line
     output             tx,                  // Outgoing serial line
-    input              transmit,            // Assert to begin transmission
-    input        [7:0] tx_byte,             // Byte to transmit
-    output             received,            // Indicates that a byte has been received
-    output       [7:0] rx_byte,             // Byte received
-    output wire        is_receiving,        // Low when receive line is idle.
-    output wire        is_transmitting,     // Low when transmit line is idle.
+    input              tx_valid,            // Assert to begin transmission
+    input        [7:0] tx_byte,             // Byte to tx_valid
+    output             rx_valid,            // Indicates that a byte has been rx_valid
+    output       [7:0] rx_byte,             // Byte rx_valid
+    output wire        rx_busy,             // Low when receive line is idle.
+    output wire        tx_busy,             // Low when tx_valid line is idle.
     output wire        recv_error,          // Indicates error in receiving packet.
     output logic [3:0] rx_samples,
     output logic [3:0] rx_sample_countdown
@@ -40,62 +43,52 @@ module uart (
 
     // http://www.sunburst-design.com/papers/CummingsHDLCON2002_Parameters_rev1_2.pdf
 
-    parameter baud_rate = 9600;
-    parameter sys_clk_freq = 50_000_000;
-
-    localparam one_baud_cnt = sys_clk_freq / (baud_rate);
+    localparam ONE_BAUD_CNT = CLK_FREQ / BAUD_RATE;
 
     //** SYMBOLIC STATE DECLARATIONS ******************************
 
-    localparam [2:0]     
-        RX_IDLE             = 3'd0, 
-        RX_CHECK_START      = 3'd1, 
-        RX_SAMPLE_BITS      = 3'd2,
-        RX_READ_BITS        = 3'd3,      
-        RX_CHECK_STOP       = 3'd4, 
-        RX_DELAY_RESTART    = 3'd5,
-        RX_ERROR            = 3'd6,      
-        RX_RECEIVED         = 3'd7;
+    typedef enum {
+        RX_IDLE,
+        RX_CHECK_START,
+        RX_SAMPLE_BITS,
+        RX_READ_BITS,
+        RX_CHECK_STOP,
+        RX_DELAY_RESTART,
+        RX_ERROR,
+        RX_RECEIVED
+    } rx_state_t;
 
-    localparam [1:0] TX_IDLE = 2'd0, TX_SENDING = 2'd1, TX_DELAY_RESTART = 2'd2, TX_RECOVER = 2'd3;
-
+    typedef enum {
+        TX_IDLE,
+        TX_SENDING,
+        TX_DELAY_RESTART,
+        TX_RECOVER
+    } tx_state_t;
 
     //** SIGNAL DECLARATIONS **************************************
 
-    reg [log2(one_baud_cnt * 16)-1:0] rx_clk;
-    reg [log2(one_baud_cnt)-1:0] tx_clk;
+    reg [$clog2(ONE_BAUD_CNT * 16) - 1:0] rx_clk;
+    reg [$clog2(ONE_BAUD_CNT)         :0] tx_clk;
 
-    reg [2:0] recv_state = RX_IDLE;
+    rx_state_t recv_state = RX_IDLE;
     reg [3:0] rx_bits_remaining;
     reg [7:0] rx_data;
 
     reg tx_out = 1'b1;
-    reg [1:0] tx_state = TX_IDLE;
+    tx_state_t tx_state = TX_IDLE;
     reg [3:0] tx_bits_remaining;
     reg [7:0] tx_data;
 
 
     //** ASSIGN STATEMENTS ****************************************
 
-    assign received = recv_state == RX_RECEIVED;
+    assign rx_valid = recv_state == RX_RECEIVED;
     assign recv_error = recv_state == RX_ERROR;
-    assign is_receiving = recv_state != RX_IDLE;
+    assign rx_busy = recv_state != RX_IDLE;
     assign rx_byte = rx_data;
 
     assign tx = tx_out;
-    assign is_transmitting = tx_state != TX_IDLE;
-
-
-    //** TASKS / FUNCTIONS **************************************** 
-
-    function integer log2(input integer M);
-        integer i;
-        begin
-            log2 = 1;
-            for (i = 0; 2 ** i <= M; i = i + 1) log2 = i + 1;
-        end
-    endfunction
-
+    assign tx_busy = tx_state != TX_IDLE;
 
     //** Body *****************************************************
 
@@ -126,7 +119,7 @@ module uart (
                 // start of data.
                 if (!rx) begin
                     // Wait 1/2 of the bit period
-                    rx_clk = one_baud_cnt / 2;
+                    rx_clk = ONE_BAUD_CNT / 2;
                     recv_state = RX_CHECK_START;
                 end
             end
@@ -137,7 +130,7 @@ module uart (
                     if (!rx) begin
                         // Pulse still there - good
                         // Wait the bit period plus 3/8 of the next
-                        rx_clk = (one_baud_cnt / 2) + (one_baud_cnt * 3) / 8;
+                        rx_clk = (ONE_BAUD_CNT / 2) + (ONE_BAUD_CNT * 3) / 8;
                         rx_bits_remaining = 8;
                         recv_state = RX_SAMPLE_BITS;
                         rx_samples = 0;
@@ -156,7 +149,7 @@ module uart (
                     if (rx) begin
                         rx_samples = rx_samples + 1'd1;
                     end
-                    rx_clk = one_baud_cnt / 8;
+                    rx_clk = ONE_BAUD_CNT / 8;
                     rx_sample_countdown = rx_sample_countdown - 1'd1;
                     recv_state = rx_sample_countdown ? RX_SAMPLE_BITS : RX_READ_BITS;
                 end
@@ -172,7 +165,7 @@ module uart (
                         rx_data = {1'd0, rx_data[7:1]};
                     end
 
-                    rx_clk = (one_baud_cnt * 3) / 8;
+                    rx_clk = (ONE_BAUD_CNT * 3) / 8;
                     rx_samples = 0;
                     rx_sample_countdown = 5;
                     rx_bits_remaining = rx_bits_remaining - 1'd1;
@@ -181,7 +174,7 @@ module uart (
                         recv_state = RX_SAMPLE_BITS;
                     end else begin
                         recv_state = RX_CHECK_STOP;
-                        rx_clk = one_baud_cnt / 2;
+                        rx_clk = ONE_BAUD_CNT / 2;
                     end
                 end
             end
@@ -203,7 +196,7 @@ module uart (
                 // cycle while in this state and then waits
                 // 2 bit periods before accepting another
                 // transmission.
-                rx_clk = 8 * sys_clk_freq / (baud_rate);
+                rx_clk = 8 * ONE_BAUD_CNT;
                 recv_state = RX_DELAY_RESTART;
             end
 
@@ -217,8 +210,8 @@ module uart (
 
 
             RX_RECEIVED: begin
-                // Successfully received a byte.
-                // Raises the received flag for one clock
+                // Successfully rx_valid a byte.
+                // Raises the rx_valid flag for one clock
                 // cycle while in this state.
                 recv_state = RX_IDLE;
             end
@@ -230,15 +223,15 @@ module uart (
 
         case (tx_state)
             TX_IDLE: begin
-                if (transmit) begin
-                    // If the transmit flag is raised in the idle
+                if (tx_valid) begin
+                    // If the tx_valid flag is raised in the idle
                     // state, start transmitting the current content
                     // of the tx_byte input.
                     tx_data = tx_byte;
                     // Send the initial, low pulse of 1 bit period
                     // to signal the start, followed by the data
                     //  tx_clk_divider =  clock_divide;                                
-                    tx_clk = one_baud_cnt;
+                    tx_clk = ONE_BAUD_CNT;
                     tx_out = 0;
                     tx_bits_remaining = 8;
                     tx_state = TX_SENDING;
@@ -251,12 +244,12 @@ module uart (
                         tx_bits_remaining = tx_bits_remaining - 1'd1;
                         tx_out = tx_data[0];
                         tx_data = {1'b0, tx_data[7:1]};
-                        tx_clk = one_baud_cnt;
+                        tx_clk = ONE_BAUD_CNT;
                         tx_state = TX_SENDING;
                     end else begin
                         // Set delay to send out 2 stop bits.
                         tx_out   = 1;
-                        tx_clk   = 16 * one_baud_cnt;  // tx_countdown = 16;
+                        tx_clk   = ONE_BAUD_CNT;  // tx_countdown = 16;
                         tx_state = TX_DELAY_RESTART;
                     end
                 end
@@ -270,8 +263,8 @@ module uart (
             end
 
             TX_RECOVER: begin
-                // Wait unitil the transmit line is deactivated.  This prevents repeated characters
-                tx_state = transmit ? TX_RECOVER : TX_IDLE;
+                // Wait unitil the tx_valid line is deactivated.  This prevents repeated characters
+                tx_state = tx_valid ? TX_RECOVER : TX_IDLE;
 
             end
 

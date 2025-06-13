@@ -200,20 +200,20 @@ module controller
     assign digit       = ~ digit_r;
 
     uart #(
-        .baud_rate   (BAUD_RATE),   
-        .sys_clk_freq(CLK_FREQ)   
+        .BAUD_RATE   (BAUD_RATE),   
+        .CLK_FREQ(CLK_FREQ)   
     )
     uart_inst (
         .clk(clk),                       
         .rstn(rstn),               
         .rx(rx),                       
-        .tx(tx_out),                        
-        .transmit(tx_valid),          
+        .tx(tx),                        
+        .tx_valid(tx_valid),          
         .tx_byte(tx_data),              
-        .received(rx_valid),        
+        .rx_valid(rx_valid),        
         .rx_byte(rx_data),              
-        .is_receiving(rx_busy),         
-        .is_transmitting(tx_busy),    
+        .rx_busy(rx_busy),         
+        .tx_busy(tx_busy)
     );
     
     uart_parser #(
