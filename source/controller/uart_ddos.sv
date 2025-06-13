@@ -7,6 +7,7 @@ module uart_ddos
     input        clk,
     input        rstn,
     input        rx,
+    input        key,
     output [7:0] abcdefgh,
     output [3:0] digit,
     output       tx,
@@ -18,7 +19,25 @@ module uart_ddos
     logic [7:0] rx_data, tx_data;
     logic       rx_busy, tx_busy, rx_error, tx_valid, rx_valid;
     wire tx_out;
-    assign tx = ~tx_out;
+    assign tx = tx_out;
+    logic key_prev, key_pressed;
+    logic [2:0] cnt, cnt_next;
+    
+    always_ff @(posedge clk) begin
+        if(~rstn) 
+            key_prev <= '0;
+        else
+            key_prev <= key;
+    end
+    
+    always_ff @(posedge clk) begin
+        if(~rstn) 
+            key_pressed <= '0;
+        
+        if(key_pressed & sb_state == IDLE_S)
+            key_pressed <= '0;
+        else if(~key & key_prev) key_pressed <= '1;
+    end
 
     typedef enum {
         IDLE_S,
@@ -36,22 +55,23 @@ module uart_ddos
     //////////// STATE MACHINE ////////////
     always_comb begin
         sb_next_state = sb_state;
+        cnt_next = cnt;
         case (sb_state)
             IDLE_S:
-                sb_next_state = SEND_BYTE;
+                if(key_pressed) sb_next_state = SEND_BYTE;
             SEND_BYTE:
                 sb_next_state = INCREMENT;
             INCREMENT:
                 sb_next_state = WAIT;
             WAIT:
-                if (~tx_busy) sb_next_state = SEND_BYTE;
+                if (~tx_busy) sb_next_state = IDLE_S;
         endcase
     end
 
     always_ff @(posedge clk) begin
         case (sb_state)
         SEND_BYTE: begin
-            tx_data  <= 8'h55;
+            tx_data  <= 8'h63;
             tx_valid <= '1;
         end
         INCREMENT: begin
@@ -71,25 +91,25 @@ module uart_ddos
     end
 
     //////////// SEVEN-SEGMENT DISPLAY ////////////
-    assign number      =   sb_state;
+    assign number      =   rx_data;
     assign abcdefgh    = ~ abcdefgh_r;
     assign digit       = ~ digit_r;
 
     uart #(
-        .baud_rate   (BAUD_RATE),   
-        .sys_clk_freq(CLK_FREQ)   
+        .BAUD_RATE   (BAUD_RATE),   
+        .CLK_FREQ(CLK_FREQ)   
     )
     uart_inst (
         .clk(clk),                       
         .rstn(rstn),               
         .rx(rx),                       
         .tx(tx_out),                        
-        .transmit(tx_valid),          
+        .tx_valid(tx_valid),          
         .tx_byte(tx_data),              
-        .received(rx_valid),        
+        .rx_valid(rx_valid),        
         .rx_byte(rx_data),              
-        .is_receiving(rx_busy),         
-        .is_transmitting(tx_busy),    
+        .rx_busy(rx_busy),         
+        .tx_busy(tx_busy),    
     );
     
     seven_segment_display #(
