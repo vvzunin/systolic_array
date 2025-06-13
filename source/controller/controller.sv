@@ -1,3 +1,4 @@
+`include "uart_parser.svh"
 module controller
 #(  parameter DATA_WIDTH = 32, // Разрядность шины входных данных
     parameter MAX_LEN    = 256,// Максимальный размер пакета 
@@ -76,13 +77,13 @@ module controller
         next_state = state;
         case (state)
             IDLE:
-                if (parser_valid & (parser_cmd == 8'h02)) next_state = FETCH_WEIGHTS;
+                if (parser_valid & (parser_cmd == `CMD_FETCH_WEIGHTS)) next_state = FETCH_WEIGHTS;
             FETCH_WEIGHTS:
-                if (parser_valid & (parser_cmd == 8'h03)) next_state = LOAD_WEIGHTS;
+                if (parser_valid & (parser_cmd == `CMD_LOAD_WEIGHTS)) next_state = LOAD_WEIGHTS;
             LOAD_WEIGHTS:
                                                           next_state = FETCH_DATA;
             FETCH_DATA:
-                if (parser_valid & (parser_cmd == 8'h04)) next_state = START_COMP;
+                if (parser_valid & (parser_cmd == `CMD_START_COMP)) next_state = START_COMP;
             START_COMP:
                                                           next_state = WAIT_RES;
             WAIT_RES:

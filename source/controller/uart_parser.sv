@@ -1,6 +1,5 @@
-// START_BIT: 0x55
-// STOP_BIT: 0x00
 // Module accepts DATA_WIDTH-width data packet
+`include "uart_parser.svh"
 module uart_parser 
 #(
     parameter DATA_WIDTH = 32
@@ -38,12 +37,12 @@ module uart_parser
         STATE_CMD: begin
             if (rx_valid)
                 case (rx_data)
-                    8'h01:   next_state = STATE_DATA;
-                    8'h02,
-                    8'h03,
-                    8'h04,
-                    8'h00:   next_state = STATE_FINISH;
-                    default: next_state = STATE_IDLE;
+                    `CMD_DATA:          next_state = STATE_DATA;
+                    `CMD_FETCH_WEIGHTS,
+                    `CMD_LOAD_WEIGHTS,
+                    `CMD_START_COMP,
+                    `STOP_BYTE:         next_state = STATE_FINISH;
+                    default:            next_state = STATE_IDLE;
                 endcase
         end
         STATE_DATA: begin

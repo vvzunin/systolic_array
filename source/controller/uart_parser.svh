@@ -1,0 +1,6 @@
+`define START_BYTE 8'h55
+`define STOP_BYTE 8'h00
+`define CMD_DATA 8'h01
+`define CMD_FETCH_WEIGHTS 8'h02
+`define CMD_LOAD_WEIGHTS 8'h03
+`define CMD_START_COMP 8'h04
