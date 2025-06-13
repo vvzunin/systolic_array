@@ -64,8 +64,8 @@ set_location_assignment PIN_137 -to digit[3]
 set_location_assignment PIN_136 -to digit[2]
 set_location_assignment PIN_135 -to digit[1]
 set_location_assignment PIN_133 -to digit[0]
-set_location_assignment PIN_115 -to rx
-set_location_assignment PIN_114 -to tx
+set_location_assignment PIN_32 -to rx
+set_location_assignment PIN_31 -to tx
 set_global_assignment -name POWER_PRESET_COOLING_SOLUTION "23 MM HEAT SINK WITH 200 LFPM AIRFLOW"
 set_global_assignment -name POWER_BOARD_THERMAL_MODEL "NONE (CONSERVATIVE)"
 set_global_assignment -name EDA_SIMULATION_TOOL "Questa Intel FPGA (SystemVerilog)"
