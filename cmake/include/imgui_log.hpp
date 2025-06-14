@@ -3,6 +3,10 @@
 #include "imgui.h"
 #include "SDL_log.h"
 
+#define LOG_ERROR(logger, category, msg) (logger).AddLog("[error] [%s] %s\n", (category), (msg))
+#define LOG_INFO(logger, category, msg) (logger).AddLog("[info] [%s] %s\n", (category), (msg))
+#define LOG_WARNING(logger, category, msg) (logger).AddLog("[warning] [%s] %s\n", (category), (msg))
+
 struct AppLog
 {
     ImGuiTextBuffer     Buf;

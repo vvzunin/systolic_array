@@ -30,3 +30,8 @@ target_link_libraries(${NAME} PRIVATE
     SDL2_image::SDL2_image
     Boost::system
     )
+
+target_compile_definitions(${NAME} PRIVATE DEFAULT_FILENAME_FONT="${CMAKE_SOURCE_DIR}/res/CaskaydiaMonoNerdFontMono-Regular.ttf")
+target_compile_definitions(${NAME} PRIVATE DEFAULT_FILENAME_WEIGHTS="${CMAKE_SOURCE_DIR}/weights.csv")
+target_compile_definitions(${NAME} PRIVATE DEFAULT_FILENAME_DATA="${CMAKE_SOURCE_DIR}/data.csv")
+target_compile_definitions(${NAME} PRIVATE DEFAULT_FILENAME_RES="${CMAKE_SOURCE_DIR}/result.csv")

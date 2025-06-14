@@ -21,6 +21,7 @@ public:
             boost::split(matrix[idx], line, boost::is_any_of(",;"));
             ++idx;
         }
+        file.close();
         return 0;
     }
 
@@ -44,6 +45,23 @@ public:
             }
             ++idx;
         }
+        file.close();
+        return 0;
+    }
+
+    template<std::integral T>
+    static int save_matrix(std::vector<std::vector<T>> &matrix, std::string path)
+    {
+        std::ofstream file(path, std::ios::out | std::ios::trunc);
+        if(!file.is_open()) return 1;
+
+        for(auto& row : matrix) {
+            for(auto& el : row) {
+                file << el << ",";
+            }
+            file << "\n";
+        }
+        file.close();
         return 0;
     }
 };

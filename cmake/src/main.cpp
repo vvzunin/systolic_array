@@ -2,23 +2,15 @@
 #include "imgui_stdlib.h"
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_sdlrenderer2.h"
-#include <stdio.h>
 #include <format>
 #include <SDL.h>
 #include "serial.hpp"
 #include "serial_port.hpp"
 #include "imgui_log.hpp"
 #include "csv_reader.hpp"
-
-#define COLOR_ERROR ImVec4{255, 0, 0, 255}
-#define COLOR_OK ImVec4{0, 255, 0, 255}
-#define COLOR_WARN ImVec4{255, 255, 0, 255}
-
-#define LOG_ERROR(logger, category, msg) (logger).AddLog("[error] [%s] %s\n", (category), (msg))
-#define LOG_INFO(logger, category, msg) (logger).AddLog("[info] [%s] %s\n", (category), (msg))
-#define LOG_WARNING(logger, category, msg) (logger).AddLog("[warning] [%s] %s\n", (category), (msg))
-#define LOG_CATEGORY_UART "uart"
-#define LOG_CATEGORY_CSV "csv"
+#include "datamatrix.hpp"
+#include "utils.hpp"
+#include "defines.hpp"
 
 #if !SDL_VERSION_ATLEAST(2,0,17)
 #error This backend requires SDL 2.0.17+ because of SDL_RenderGeometry() function
@@ -86,7 +78,7 @@ int main(int, char**)
     uint8_t current_style = 0;
 
     // Setyp Dear ImGui font
-    imgui_io.Fonts->AddFontFromFileTTF("../../res/CaskaydiaMonoNerdFontMono-Regular.ttf", 18.0f);
+    imgui_io.Fonts->AddFontFromFileTTF(DEFAULT_FILENAME_FONT, 18.0f);
 
     // Setup Platform/Renderer backends
     ImGui_ImplSDL2_InitForSDLRenderer(window, renderer);
@@ -97,31 +89,19 @@ int main(int, char**)
     size_t port_list_idx = 0;
     list_serial_ports(port_list);
 
-    typedef int32_t data_t;
-    std::string filename_weights = "../../weights.csv";
-    std::string filename_data = "../../data.csv";
-    std::string filename_result = "../../result.csv";
-    std::vector<std::vector<data_t>> matrix_weights;
-    std::vector<std::vector<data_t>> matrix_data;
-    CSVReader::read_matrix(matrix_weights, filename_weights);
-    CSVReader::read_matrix(matrix_data, filename_data);
-    bool weights_loaded = false, data_loaded = false;
-
-    
+    Datamatrix<data_t> dweight(DEFAULT_FILENAME_WEIGHTS);
+    Datamatrix<data_t> ddata(DEFAULT_FILENAME_DATA);
+    Datamatrix<data_t> dresult(DEFAULT_FILENAME_RES);
+    CSVReader::read_matrix(dweight.matrix, dweight.filename);
+    CSVReader::read_matrix(ddata.matrix, ddata.filename);
 
     AppLog log;
 
-    auto load_matrix = [&](std::vector<std::vector<data_t>> &matrix, std::string &path, bool &loaded) {
-        int res = CSVReader::read_matrix(matrix, path); 
-        if(res > 0) LOG_ERROR(log, LOG_CATEGORY_CSV, std::format("failed to load file {}", path).c_str());
-        else loaded = true;
-    };
-
-    load_matrix(matrix_weights, filename_weights, weights_loaded);
-    load_matrix(matrix_data, filename_data, data_loaded);
+    load_matrix<data_t>(log, dweight.matrix, dweight.filename, dweight.loaded);
+    load_matrix<data_t>(log, ddata.matrix, ddata.filename, ddata.loaded);
 
     boost::asio::io_context asio_io;
-    Serial uart(asio_io, port_list[port_list_idx], 9600);
+    Serial uart(asio_io, port_list[port_list_idx], BAUDRATE);
 
     // Main loop
     bool done = false;
@@ -220,15 +200,15 @@ int main(int, char**)
 
             {
                 if(ImGui::BeginTabBar("DataTabBar")) {
-                    if(ImGui::BeginTabItem(weights_loaded ? "Weights (Loaded)" : "Weights")) {
-                        ImGui::InputText("Weights", &filename_weights);
+                    if(ImGui::BeginTabItem(dweight.loaded ? "Weights (Loaded)" : "Weights")) {
+                        ImGui::InputText("Weights", &dweight.filename);
                         ImGui::SameLine();
                         if(ImGui::Button("Read file"))
-                            load_matrix(matrix_weights, filename_weights, weights_loaded);
+                            load_matrix<data_t>(log, dweight.matrix, dweight.filename, dweight.loaded);
                         
-                        if(!matrix_weights.empty()) {
-                            size_t n = matrix_weights.size();
-                            size_t m = matrix_weights.begin()->size();
+                        if(!dweight.matrix.empty()) {
+                            size_t n = dweight.get_h();
+                            size_t m = dweight.get_w();
                             if(ImGui::BeginTable("table_matrix_upload", m, table_flags)) {
                                 for(size_t row = 0; row < n; ++row) {
                                     ImGui::TableNextRow();
@@ -236,28 +216,29 @@ int main(int, char**)
                                         ImGui::TableSetColumnIndex(col);
                                         ImGui::PushID(row * m + col);
                                         ImGui::PushStyleColor(ImGuiCol_FrameBg, IM_COL32(0, 0, 0, 0));
-                                        int el = static_cast<int>(matrix_weights[row][col]);
+                                        int el = static_cast<int>(dweight.matrix[row][col]);
                                         ImGui::InputInt("##xx", &el, 0, 0);
-                                        matrix_weights[row][col] = static_cast<data_t>(el);
+                                        dweight.matrix[row][col] = static_cast<data_t>(el);
                                         ImGui::PopStyleColor();
                                         ImGui::PopID();
                                     }
                                 }
                                 ImGui::EndTable();
                             }
+                            ImGui::Text("Determined size [height x width]: %d x %d", n, m);
                         }
                         else ImGui::TextColored(COLOR_WARN, "MATRIX EMPTY");
                         ImGui::EndTabItem();
                     }
-                    if(ImGui::BeginTabItem(data_loaded ? "Data (Loaded)" : "Data")) {
-                        ImGui::InputText("Data", &filename_data);
+                    if(ImGui::BeginTabItem(ddata.loaded ? "Data (Loaded)" : "Data")) {
+                        ImGui::InputText("Data", &ddata.filename);
                         ImGui::SameLine();
                         if(ImGui::Button("Read file"))
-                            load_matrix(matrix_data, filename_data, data_loaded);
+                            load_matrix<data_t>(log, ddata.matrix, ddata.filename, ddata.loaded);
 
-                        if(!matrix_data.empty()) {
-                            size_t n = matrix_data.size();
-                            size_t m = matrix_data.begin()->size();
+                        if(!ddata.matrix.empty()) {
+                            size_t n = ddata.get_h();
+                            size_t m = ddata.get_w();
                             if(ImGui::BeginTable("table_matrix_upload", m, table_flags)) {
                                 for(size_t row = 0; row < n; ++row) {
                                     ImGui::TableNextRow();
@@ -265,15 +246,16 @@ int main(int, char**)
                                         ImGui::TableSetColumnIndex(col);
                                         ImGui::PushID(row * m + col);
                                         ImGui::PushStyleColor(ImGuiCol_FrameBg, IM_COL32(0, 0, 0, 0));
-                                        int el = static_cast<int>(matrix_data[row][col]);
+                                        int el = static_cast<int>(ddata.matrix[row][col]);
                                         ImGui::InputInt("##xx", &el, 0, 0);
-                                        matrix_data[row][col] = static_cast<data_t>(el);
+                                        ddata.matrix[row][col] = static_cast<data_t>(el);
                                         ImGui::PopStyleColor();
                                         ImGui::PopID();
                                     }
                                 }
                                 ImGui::EndTable();
                             }
+                            ImGui::Text("Determined size [height x width]: %d x %d", n, m);
                         }
                         else ImGui::TextColored(COLOR_WARN, "MATRIX EMPTY");
                         ImGui::EndTabItem();
@@ -285,43 +267,64 @@ int main(int, char**)
 
 
             if(ImGui::Button("Upload!")) {
-                if(uart.is_open() && data_loaded && weights_loaded) {
+                if(uart.is_open() && dweight.loaded && ddata.loaded) {
+                    dresult.resize(ddata.get_h(), dweight.get_w());
+
+                    std::vector<uint8_t> packet; 
+                    form_packet(ddata.matrix, dweight.matrix, packet); 
                     boost::system::error_code ec;
-                    ec = uart.send_packet<data_t>(0x02);
-                    if(ec) LOG_ERROR(log, LOG_CATEGORY_UART, ec.what().c_str());
-                    ec = uart.send_packet<data_t>(0x01, matrix_weights);
-                    if(ec) LOG_ERROR(log, LOG_CATEGORY_UART, ec.what().c_str());
-                    ec = uart.send_packet<data_t>(0x03);
-                    if(ec) LOG_ERROR(log, LOG_CATEGORY_UART, ec.what().c_str());
-                    ec = uart.send_packet<data_t>(0x01, matrix_data);
-                    if(ec) LOG_ERROR(log, LOG_CATEGORY_UART, ec.what().c_str());
-                    ec = uart.send_packet<data_t>(0x04);
-                    if(ec) LOG_ERROR(log, LOG_CATEGORY_UART, ec.what().c_str());
-                    LOG_INFO(log, LOG_CATEGORY_UART, std::format("successfuly send data to {}", port_list[port_list_idx]).c_str());
+                    size_t bytes_sent = uart.write(packet, ec);
+                    LOG_INFO(log, LOG_CATEGORY_UART, std::format("successfuly sent {} bytes to {}", bytes_sent, port_list[port_list_idx]).c_str());
 
                     LOG_INFO(log, LOG_CATEGORY_UART, "waiting for result...");
                     
-                    std::vector<uint8_t> res;
-                    // ec = uart.read(res, 8 * 4 * 4);
-                    // if(ec) LOG_ERROR(log, LOG_CATEGORY_UART, ec.what().c_str());
-                    // else for(auto& el : res) std::cout << el << std::endl;
-                    // std::cout << res.size() << std::endl;
-                    while(res.size() == 0) uart.read(res, 1);
+                    std::vector<data_t> result;
+                    result.resize(dresult.get_h() * dresult.get_w());
+                    size_t bytes_read = uart.read(result, ec);
+                    if(ec) LOG_ERROR(log, LOG_CATEGORY_UART, ec.what().c_str());
+
+                    if(bytes_read != 0) {
+                        LOG_INFO(log, LOG_CATEGORY_UART, std::format("{} bytes recieved", bytes_read).c_str());
+                        for(size_t i = 0; i < result.size(); ++i)
+                            dresult.matrix[static_cast<size_t>(std::floor(i / dresult.get_w()))][i % dresult.get_w()] = result[i];
+                    }
+                    else
+                        LOG_WARNING(log, LOG_CATEGORY_UART, "No data recieved");
+
                 }
                 else if(!uart.is_open()) 
                     LOG_ERROR(log, LOG_CATEGORY_UART, "serial port closed");
-                else if(!data_loaded) 
+                else if(!ddata.loaded) 
                     LOG_ERROR(log, LOG_CATEGORY_CSV, "data matrix not loaded");
-                else if(!weights_loaded) 
+                else if(!dweight.loaded) 
                     LOG_ERROR(log, LOG_CATEGORY_CSV, "weight matrix not loaded");
             }
 
 
             ImGui::SeparatorText("Download");
-            ImGui::InputText("Result", &filename_data);
+            ImGui::InputText("Result", &dresult.filename);
             ImGui::SameLine();
             if(ImGui::Button("Save"))
-                load_matrix(matrix_data, filename_data, data_loaded);
+                save_matrix(log, dresult.matrix, dresult.filename);
+
+            if(!dresult.matrix.empty()) {
+                size_t n = dresult.get_h();
+                size_t m = dresult.get_w();
+                if(ImGui::BeginTable("table_matrix_upload", m, table_flags)) {
+                    for(size_t row = 0; row < n; ++row) {
+                        ImGui::TableNextRow();
+                        for(size_t col = 0; col < m; ++col) {
+                            ImGui::TableSetColumnIndex(col);
+                            ImGui::PushID(row * m + col);
+                            ImGui::Text(std::to_string(dresult.matrix[row][col]).c_str());
+                            ImGui::PopID();
+                        }
+                    }
+                    ImGui::EndTable();
+                }
+                ImGui::Text("Determined size [height x width]: %d x %d", n, m);
+            }
+            else ImGui::TextColored(COLOR_WARN, "MATRIX EMPTY");
 
             ImGui::EndChild();
         }
