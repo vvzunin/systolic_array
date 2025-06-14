@@ -31,29 +31,30 @@ module uart_parser
 
         case (state)
         STATE_IDLE: begin
-            if (rx_valid && rx_data == 8'h55)
+            if (rx_valid && rx_data == `START_BYTE)
                 next_state = STATE_CMD;
         end
-        STATE_CMD: begin
+        STATE_CMD: begin                                    
             if (rx_valid)
                 case (rx_data)
                     `CMD_DATA:          next_state = STATE_DATA;
                     `CMD_FETCH_WEIGHTS,
                     `CMD_LOAD_WEIGHTS,
+                    `CMD_FETCH_DATA,
                     `CMD_START_COMP,
                     `STOP_BYTE:         next_state = STATE_FINISH;
                     default:            next_state = STATE_IDLE;
                 endcase
         end
         STATE_DATA: begin
-            if (rx_valid && data_ptr == DATA_WIDTH)
+            if (rx_valid & data_ptr == DATA_WIDTH)
                 next_state = STATE_FINISH;
         end
         STATE_FINISH: begin
             next_state = STATE_IDLE;
         end
         endcase
-    end
+    end 
 
     always_ff @(negedge clk) begin
         case (state)

@@ -3,4 +3,5 @@
 `define CMD_DATA 8'h01
 `define CMD_FETCH_WEIGHTS 8'h02
 `define CMD_LOAD_WEIGHTS 8'h03
-`define CMD_START_COMP 8'h04
+`define CMD_FETCH_DATA 8'h04
+`define CMD_START_COMP 8'h05
