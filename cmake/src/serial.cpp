@@ -1,9 +1,8 @@
 #include "serial.hpp"
 
 Serial::Serial(asio::io_context &io, std::string &device_name, int baud)
-    : port {io}, device {device_name}, baudrate {baud}
+    : io{io}, port {io}, device {device_name}, baudrate {baud}
 { 
-
 }
 
 system::error_code Serial::open() noexcept

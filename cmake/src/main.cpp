@@ -280,8 +280,11 @@ int main(int, char**)
                     
                     std::vector<data_t> result;
                     result.resize(dresult.get_h() * dresult.get_w());
-                    size_t bytes_read = uart.read(result, ec);
-                    if(ec) LOG_ERROR(log, LOG_CATEGORY_UART, ec.what().c_str());
+                    size_t bytes_read = uart.read(result, ec, UART_TIMEOUT);
+                    if(ec == boost::asio::error::operation_aborted) 
+                        LOG_ERROR(log, LOG_CATEGORY_UART, std::format("Timeout [{}] exceeded", UART_TIMEOUT).c_str());
+                    else if(ec) 
+                        LOG_ERROR(log, LOG_CATEGORY_UART, ec.what().c_str());
 
                     if(bytes_read != 0) {
                         LOG_INFO(log, LOG_CATEGORY_UART, std::format("{} bytes recieved", bytes_read).c_str());

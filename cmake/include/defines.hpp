@@ -1,4 +1,7 @@
 #include <cstdint>
+#include <chrono>
+
+using namespace std::chrono_literals;
 
 #define START_BYTE static_cast<uint8_t>(0x55)
 #define STOP_BYTE static_cast<uint8_t>(0x00)
@@ -9,6 +12,7 @@
 #define CMD_START_COMP static_cast<uint8_t>(0x05)
 
 #define BAUDRATE 9600
+#define UART_TIMEOUT 1000ms
 
 #define COLOR_ERROR ImVec4{255, 0, 0, 255}
 #define COLOR_OK ImVec4{0, 255, 0, 255}
