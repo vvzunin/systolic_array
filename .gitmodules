@@ -1,0 +1,3 @@
+[submodule "cmake/lib/imgui"]
+	path = cmake/lib/imgui
+	url = https://github.com/ocornut/imgui.git
